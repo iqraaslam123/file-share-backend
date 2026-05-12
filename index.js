@@ -17,10 +17,34 @@ cloudinary.config({
 });
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log("MongoDB Error:", err.message));
+// mongoose.connect(process.env.MONGO_URI)
+//   .then(() => console.log("MongoDB Connected"))
+//   .catch(err => console.log("MongoDB Error:", err.message));
+// MongoDB Connection
+let mongoStatus = "Disconnected";
+let mongoError = "";
 
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => { mongoStatus = "Connected"; })
+  .catch(err => { 
+    mongoStatus = "Disconnected";
+    mongoError = err.message;
+  });
+
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    status: "Server running",
+    mongo: mongoStatus,
+    mongoError: mongoError,
+    env: {
+      mongo_uri: process.env.MONGO_URI ? "Set ✅" : "Missing ❌",
+      cloud_name: process.env.CLOUD_NAME ? "Set ✅" : "Missing ❌",
+      api_key: process.env.API_KEY ? "Set ✅" : "Missing ❌",
+      api_secret: process.env.API_SECRET ? "Set ✅" : "Missing ❌",
+    }
+  });
+});
 // MongoDB Schema
 const FileSchema = new mongoose.Schema({
   url: String,
