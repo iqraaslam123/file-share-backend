@@ -9,71 +9,62 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Cloudinary Configuration
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
   api_key: process.env.API_KEY,
   api_secret: process.env.API_SECRET
 });
 
-// MongoDB Connection
-// mongoose.connect(process.env.MONGO_URI)
-//   .then(() => console.log("MongoDB Connected"))
-//   .catch(err => console.log("MongoDB Error:", err.message));
-// MongoDB Connection
-let mongoStatus = "Disconnected";
-let mongoError = "";
-
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => { mongoStatus = "Connected"; })
-  .catch(err => { 
-    mongoStatus = "Disconnected";
-    mongoError = err.message;
-  });
-
-// Root route
-app.get('/', (req, res) => {
-  res.json({
-    status: "Server running",
-    mongo: mongoStatus,
-    mongoError: mongoError,
-    env: {
-      mongo_uri: process.env.MONGO_URI ? "Set ✅" : "Missing ❌",
-      cloud_name: process.env.CLOUD_NAME ? "Set ✅" : "Missing ❌",
-      api_key: process.env.API_KEY ? "Set ✅" : "Missing ❌",
-      api_secret: process.env.API_SECRET ? "Set ✅" : "Missing ❌",
-    }
-  });
-});
 // MongoDB Schema
 const FileSchema = new mongoose.Schema({
   url: String,
   name: String,
   createdAt: { type: Date, default: Date.now }
 });
-const File = mongoose.model('File', FileSchema);
+const File = mongoose.models.File || mongoose.model('File', FileSchema);
 
-// Multer - Memory Storage
+// Connection function - har request pe call hogi
+const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) return;
+  await mongoose.connect(process.env.MONGO_URI);
+};
+
+// Multer
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
-// Root route - test ke liye
-app.get('/', (req, res) => {
-  res.json({
-    status: "Server running",
-    mongo: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected",
-    env: {
-      mongo_uri: process.env.MONGO_URI ? "Set ✅" : "Missing ❌",
-      cloud_name: process.env.CLOUD_NAME ? "Set ✅" : "Missing ❌",
-      api_key: process.env.API_KEY ? "Set ✅" : "Missing ❌",
-      api_secret: process.env.API_SECRET ? "Set ✅" : "Missing ❌",
-    }
-  });
+// Root
+app.get('/', async (req, res) => {
+  try {
+    await connectDB();
+    res.json({
+      status: "Server running",
+      mongo: mongoose.connection.readyState === 1 ? "Connected ✅" : "Disconnected ❌"
+    });
+  } catch (err) {
+    res.json({
+      status: "Server running",
+      mongo: "Disconnected ❌",
+      error: err.message
+    });
+  }
 });
 
-// Routes
+// Get files
+app.get('/api/files', async (req, res) => {
+  try {
+    await connectDB();
+    const files = await File.find().sort({ createdAt: -1 });
+    res.json(files);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload file
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
+    await connectDB();
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { folder: 'file_sharing_app' },
@@ -96,14 +87,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-app.get('/api/files', async (req, res) => {
-  try {
-    const files = await File.find().sort({ createdAt: -1 });
-    res.json(files);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+module.exports = app;
