@@ -19,7 +19,7 @@ cloudinary.config({
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log(err));
+  .catch(err => console.log("MongoDB Error:", err.message));
 
 // MongoDB Schema
 const FileSchema = new mongoose.Schema({
@@ -29,14 +29,27 @@ const FileSchema = new mongoose.Schema({
 });
 const File = mongoose.model('File', FileSchema);
 
-// Multer - Memory Storage (no disk, no cloudinary storage package needed)
+// Multer - Memory Storage
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
+
+// Root route - test ke liye
+app.get('/', (req, res) => {
+  res.json({
+    status: "Server running",
+    mongo: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected",
+    env: {
+      mongo_uri: process.env.MONGO_URI ? "Set ✅" : "Missing ❌",
+      cloud_name: process.env.CLOUD_NAME ? "Set ✅" : "Missing ❌",
+      api_key: process.env.API_KEY ? "Set ✅" : "Missing ❌",
+      api_secret: process.env.API_SECRET ? "Set ✅" : "Missing ❌",
+    }
+  });
+});
 
 // Routes
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
-    // Buffer ko Cloudinary pe upload karo
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { folder: 'file_sharing_app' },
@@ -60,8 +73,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 });
 
 app.get('/api/files', async (req, res) => {
-  const files = await File.find().sort({ createdAt: -1 });
-  res.json(files);
+  try {
+    const files = await File.find().sort({ createdAt: -1 });
+    res.json(files);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 const PORT = process.env.PORT || 5000;
